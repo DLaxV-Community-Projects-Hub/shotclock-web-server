@@ -5,12 +5,12 @@ class Room {
   pin: string; // TODO argon2
   active: boolean = true;
   running: boolean = false;
-  lastTimerOrActionDate: Date;
   shotclockRemaining: number; // milliseconds
 
   // In-Memory only props
+  initialShotclock: number; // seconds
+  lastTimerOrActionDate: Date;
   clients: Array<WebSocket> = [];
-  authenticatedClients: Array<WebSocket> = [];
   activeTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Additional properties for future use
@@ -22,48 +22,80 @@ class Room {
   constructor(name: string, pin: string, initialShotclock: number) {
     this.name = name;
     this.pin = pin;
+    this.initialShotclock = initialShotclock;
     this.shotclockRemaining = initialShotclock * 1000;
     this.lastTimerOrActionDate = new Date();
   }
 
   joinClient(ws: WebSocket) {
     this.clients.push(ws);
+    this.sendRunningToClient(ws);
     this.sendShotclockToClient(ws);
   }
 
-  authenticateClient(ws: WebSocket, pin: string): boolean {
-    if (pin === this.pin) {
-      this.authenticatedClients.push(ws);
-      return true;
-    }
-    return false;
+  disconnectClient(ws: WebSocket) {
+    const index: number = this.clients.indexOf(ws);
+    if (index !== -1) this.clients.splice(index, 1);
+    if (this.clients.length == 0) this.pause();
+  }
+
+  checkPin(pin: string): boolean {
+    return pin === this.pin;
   }
 
   sendShotclockToClients() {
-    for (const client of this.clients) this.sendShotclockToClient(client);
+    const remainingSeconds: number = Math.round(this.shotclockRemaining / 1000);
+    for (const client of this.clients) {
+      this.sendShotclockToClient(client, remainingSeconds);
+    }
   }
 
-  sendShotclockToClient(client: WebSocket) {
-    const remainingSeconds: number = Math.round(this.shotclockRemaining / 1000);
-    console.log(remainingSeconds);
+  sendShotclockToClient(
+    client: WebSocket,
+    remainingSeconds: number | null = null
+  ) {
+    if (remainingSeconds === null)
+      remainingSeconds = Math.round(this.shotclockRemaining / 1000);
     client.send("t;" + this.gameTime + ";" + remainingSeconds);
   }
 
+  sendRunningToClients() {
+    for (const client of this.clients) {
+      this.sendRunningToClient(client);
+    }
+  }
+
+  sendRunningToClient(client: WebSocket) {
+    client.send("r;" + (this.running ? 1 : 0));
+  }
+
   start() {
-    console.log("Start " + this.name);
-    this.running = true;
-    this.lastTimerOrActionDate = new Date();
-    this.setNextSecondTimer();
+    if (!this.running) {
+      this.running = true;
+      this.lastTimerOrActionDate = new Date();
+      this.setNextSecondTimer();
+      this.sendRunningToClients();
+    }
   }
 
   pause() {
-    this.running = false;
-    if (this.activeTimer !== null) clearTimeout(this.activeTimer);
-    if (this.lastTimerOrActionDate !== null) {
-      this.shotclockRemaining =
-        Date.now() - this.lastTimerOrActionDate.getTime();
-      this.lastTimerOrActionDate = new Date();
+    if (this.running) {
+      this.running = false;
+      if (this.activeTimer !== null) clearTimeout(this.activeTimer);
+      if (this.lastTimerOrActionDate !== null) {
+        this.shotclockRemaining =
+          this.shotclockRemaining -
+          (Date.now() - this.lastTimerOrActionDate.getTime());
+        this.lastTimerOrActionDate = new Date();
+      }
+      this.sendRunningToClients();
     }
+  }
+
+  reset() {
+    this.lastTimerOrActionDate = new Date();
+    this.shotclockRemaining = this.initialShotclock * 1000;
+    this.sendShotclockToClients();
   }
 
   setNextSecondTimer() {
@@ -84,15 +116,10 @@ class Room {
       this.shotclockRemaining = 0;
       this.running = false;
     }
-    console.log(
-      "Shotclock remaining in " + this.name + ": " + this.shotclockRemaining
-    );
     this.lastTimerOrActionDate = new Date();
     this.sendShotclockToClients();
     this.setNextSecondTimer();
   }
-
-  reset() {}
 }
 
 export default Room;

@@ -12,6 +12,8 @@ let rooms: Record<string, Room> = {};
 wss.on("connection", function connection(ws: WebSocket, req: any) {
   const reqUrl: any = url.parse(req["url"]);
   const roomName: string = reqUrl["pathname"].substring(1);
+  let authenticated: boolean = false;
+
   const searchParams: URLSearchParams = new URLSearchParams(reqUrl["search"]);
   let room: Room;
   if (!(roomName in rooms)) {
@@ -19,10 +21,9 @@ wss.on("connection", function connection(ws: WebSocket, req: any) {
       // Create room
       const pin: string = searchParams.get("pin") as string;
       room = new Room(roomName, pin, initialShotclock);
-      room.authenticateClient(ws, pin);
+      authenticated = true;
       rooms[roomName] = room;
       console.log("Room " + roomName + " created with PIN " + pin);
-      room.start();
     } else {
       ws.send("ROOM_NOT_FOUND");
       ws.close();
@@ -35,7 +36,7 @@ wss.on("connection", function connection(ws: WebSocket, req: any) {
   if (searchParams.has("pin")) {
     // Check PIN
     const pin: string = searchParams.get("pin") as string;
-    if (!room.authenticateClient(ws, pin)) {
+    if (!(authenticated = room.checkPin(pin))) {
       console.log(
         "Unsuccessful authentication for room " +
           room.name +
@@ -45,10 +46,30 @@ wss.on("connection", function connection(ws: WebSocket, req: any) {
       ws.send("WRONG_PIN");
       ws.close();
       return;
+    } else {
+      ws.send("AUTHENTICATED");
     }
   }
 
   room.joinClient(ws);
 
-  ws.on("message", function message(data) {});
+  ws.on("message", function message(data) {
+    if (!authenticated) return;
+    const message: string = new String(data).toString();
+    switch (message) {
+      case "start":
+        room.start();
+        break;
+      case "pause":
+        room.pause();
+        break;
+      case "reset":
+        room.reset();
+        break;
+    }
+  });
+
+  ws.on("close", function close() {
+    room.disconnectClient(ws);
+  });
 });
