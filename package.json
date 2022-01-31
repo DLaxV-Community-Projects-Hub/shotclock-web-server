@@ -1,0 +1,22 @@
+{
+  "name": "shotclock-web-server",
+  "version": "1.0.0",
+  "description": "Server with WebSocket communication for the web shotclock",
+  "main": "build/index.js",
+  "scripts": {
+    "dev": "nodemon",
+    "build": "rimraf ./build && tsc",
+    "start": "npm run build && node build/index.js"
+  },
+  "dependencies": {
+    "ws": "^8.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^17.0.13",
+    "@types/ws": "^8.2.2",
+    "nodemon": "^2.0.15",
+    "rimraf": "^3.0.2",
+    "ts-node": "^10.4.0",
+    "typescript": "^4.5.5"
+  }
+}
