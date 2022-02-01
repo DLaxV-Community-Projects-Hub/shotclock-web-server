@@ -98,11 +98,8 @@ class Room {
     // Auto restart when reset after it hit 0
     let restart: boolean = this.shotclockRemaining == 0;
     this.shotclockRemaining = this.initialShotclock * 1000;
-    if (restart) {
-      this.start();
-    } else {
-      this.sendShotclockToClients();
-    }
+    this.sendShotclockToClients();
+    if (restart) this.start();
   }
 
   setNextSecondTimer() {
