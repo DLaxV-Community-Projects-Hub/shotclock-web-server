@@ -14,7 +14,10 @@ let rooms: Record<string, Room> = {};
 
 wss.on("connection", function connection(ws: WebSocket, req: any) {
   const reqUrl: any = url.parse(req["url"]);
-  const roomName: string = reqUrl["pathname"].substring(1);
+  let roomName: string = reqUrl["pathname"];
+  // Remove all leading slashes
+  while (roomName.charAt(0) === "/") roomName = roomName.substring(1)
+
   let authenticated: boolean = false;
 
   const searchParams: URLSearchParams = new URLSearchParams(reqUrl["search"]);
