@@ -1,3 +1,4 @@
+import { isArgumentsObject } from "util/types";
 import { Data, WebSocket } from "ws";
 
 class Room {
@@ -95,12 +96,13 @@ class Room {
   reset() {
     this.lastTimerOrActionDate = new Date();
     // Auto restart when reset after it hit 0
-    if (this.shotclockRemaining == 0) {
-      this.running = true;
-      this.sendRunningToClients();
-    }
+    let restart: boolean = this.shotclockRemaining == 0;
     this.shotclockRemaining = this.initialShotclock * 1000;
-    this.sendShotclockToClients();
+    if (restart) {
+      this.start();
+    } else {
+      this.sendShotclockToClients();
+    }
   }
 
   setNextSecondTimer() {
