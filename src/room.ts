@@ -94,6 +94,11 @@ class Room {
 
   reset() {
     this.lastTimerOrActionDate = new Date();
+    // Auto restart when reset after it hit 0
+    if (this.shotclockRemaining == 0) {
+      this.running = true;
+      this.sendRunningToClients();
+    }
     this.shotclockRemaining = this.initialShotclock * 1000;
     this.sendShotclockToClients();
   }
@@ -115,6 +120,7 @@ class Room {
     if (this.shotclockRemaining <= 0) {
       this.shotclockRemaining = 0;
       this.running = false;
+      this.sendRunningToClients();
     }
     this.lastTimerOrActionDate = new Date();
     this.sendShotclockToClients();
