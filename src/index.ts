@@ -3,9 +3,12 @@ const url = require("url");
 import { URLSearchParams } from "url";
 import Room from "./room";
 
+const port: number = 8080;
+
 const initialShotclock: number = 30;
 
-const wss: WebSocketServer = new WebSocketServer({ port: 8888 });
+const wss: WebSocketServer = new WebSocketServer({ port });
+console.log("Listening on port " + port);
 
 let rooms: Record<string, Room> = {};
 
