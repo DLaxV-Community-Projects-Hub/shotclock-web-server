@@ -16,7 +16,7 @@ wss.on("connection", function connection(ws: WebSocket, req: any) {
   const reqUrl: any = url.parse(req["url"]);
   let roomName: string = reqUrl["pathname"];
   // Remove all leading slashes
-  while (roomName.charAt(0) === "/") roomName = roomName.substring(1)
+  while (roomName.charAt(0) === "/") roomName = roomName.substring(1);
 
   let authenticated: boolean = false;
 
@@ -62,7 +62,13 @@ wss.on("connection", function connection(ws: WebSocket, req: any) {
   ws.on("message", function message(data) {
     if (!authenticated) return;
     const message: string = new String(data).toString();
-    switch (message) {
+    let command: string = message;
+    let commandData: string | null = null;
+    if (message.includes(";")) {
+      command = message.substring(0, message.indexOf(";"));
+      commandData = message.substring(message.indexOf(";") + 1, message.length);
+    }
+    switch (command) {
       case "start":
         room.start();
         break;
@@ -71,6 +77,15 @@ wss.on("connection", function connection(ws: WebSocket, req: any) {
         break;
       case "reset":
         room.reset();
+        break;
+      case "rewind":
+        room.rewindToLastReset();
+        break;
+      case "updateTime":
+        if (commandData) {
+          const t: number = parseInt(commandData);
+          if (!isNaN(t)) room.updateTime(t);
+        }
         break;
     }
   });

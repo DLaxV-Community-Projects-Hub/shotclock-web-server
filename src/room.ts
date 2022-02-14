@@ -11,6 +11,7 @@ class Room {
   // In-Memory only props
   initialShotclock: number; // seconds
   lastTimerOrActionDate: Date;
+  shotclockAtLastReset: number | null = null;
   clients: Array<WebSocket> = [];
   activeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -73,9 +74,9 @@ class Room {
   start() {
     if (!this.running) {
       this.running = true;
-      this.lastTimerOrActionDate = new Date();
       this.setNextSecondTimer();
       this.sendRunningToClients();
+      this.lastTimerOrActionDate = new Date();
     }
   }
 
@@ -94,12 +95,38 @@ class Room {
   }
 
   reset() {
-    this.lastTimerOrActionDate = new Date();
     // Auto restart when reset after it hit 0
     let restart: boolean = this.shotclockRemaining == 0;
+    this.shotclockRemaining =
+      this.shotclockRemaining -
+      (Date.now() - this.lastTimerOrActionDate.getTime());
+    this.shotclockAtLastReset = this.shotclockRemaining;
     this.shotclockRemaining = this.initialShotclock * 1000;
     this.sendShotclockToClients();
     if (restart) this.start();
+    this.lastTimerOrActionDate = new Date();
+  }
+
+  rewindToLastReset() {
+    if (this.shotclockAtLastReset) {
+      this.shotclockRemaining = this.shotclockAtLastReset;
+      this.sendShotclockToClients();
+      if (this.running) {
+        if (this.activeTimer !== null) clearTimeout(this.activeTimer);
+        this.setNextSecondTimer();
+      }
+      this.lastTimerOrActionDate = new Date();
+    }
+  }
+
+  updateTime(t: number) {
+    this.shotclockRemaining = Math.max(0, this.shotclockRemaining + t * 1000);
+    this.sendShotclockToClients();
+    if (this.running) {
+      if (this.activeTimer !== null) clearTimeout(this.activeTimer);
+      this.setNextSecondTimer();
+    }
+    this.lastTimerOrActionDate = new Date();
   }
 
   setNextSecondTimer() {
@@ -121,9 +148,9 @@ class Room {
       this.running = false;
       this.sendRunningToClients();
     }
-    this.lastTimerOrActionDate = new Date();
     this.sendShotclockToClients();
     this.setNextSecondTimer();
+    this.lastTimerOrActionDate = new Date();
   }
 }
 
