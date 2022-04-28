@@ -130,8 +130,10 @@ class Room {
   }
 
   horn() {
-    for (const client of this.clients) {
-      client.send("HORN");
+    if (this.shotclockRemaining > 2000) {
+      for (const client of this.clients) {
+        client.send("HORN");
+      }
     }
   }
 
