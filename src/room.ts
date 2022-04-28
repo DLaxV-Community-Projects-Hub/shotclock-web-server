@@ -14,6 +14,7 @@ class Room {
   shotclockAtLastReset: number | null = null;
   clients: Array<WebSocket> = [];
   activeTimer: ReturnType<typeof setTimeout> | null = null;
+  websocketKeepAliveTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Additional properties for future use
   gameTime: number = 0;
@@ -77,6 +78,10 @@ class Room {
       this.setNextSecondTimer();
       this.sendRunningToClients();
       this.lastTimerOrActionDate = new Date();
+      if (this.websocketKeepAliveTimer != null) {
+        clearTimeout(this.websocketKeepAliveTimer);
+        this.websocketKeepAliveTimer = null;
+      }
     }
   }
 
@@ -91,7 +96,17 @@ class Room {
         this.lastTimerOrActionDate = new Date();
       }
       this.sendRunningToClients();
+      this.startWebsocketKeepAliveTimer();
     }
+  }
+
+  startWebsocketKeepAliveTimer() {
+    this.websocketKeepAliveTimer =  setTimeout(() => {
+      this.sendShotclockToClients();
+      if (!this.running) {
+        this.startWebsocketKeepAliveTimer();
+      }
+    }, 60000);
   }
 
   reset() {
