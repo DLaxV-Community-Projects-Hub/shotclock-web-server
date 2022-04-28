@@ -104,7 +104,7 @@ class Room {
     this.websocketKeepAliveTimer =  setInterval(() => {
       console.log("Keeping websocket connections in room " + this.name + " alive");
       this.sendShotclockToClients();
-    }, 60000);
+    }, 10000);
   }
 
   reset() {
