@@ -87,6 +87,9 @@ wss.on("connection", function connection(ws: WebSocket, req: any) {
           if (!isNaN(t)) room.updateTime(t);
         }
         break;
+      case "horn":
+        room.horn();
+        break;
     }
   });
 

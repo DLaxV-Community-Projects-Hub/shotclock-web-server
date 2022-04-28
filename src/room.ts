@@ -129,6 +129,12 @@ class Room {
     this.lastTimerOrActionDate = new Date();
   }
 
+  horn() {
+    for (const client of this.clients) {
+      client.send("horn");
+    }
+  }
+
   setNextSecondTimer() {
     if (this.running) {
       let timeout: number = this.shotclockRemaining % 1000;
