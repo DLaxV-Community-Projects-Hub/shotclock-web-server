@@ -131,7 +131,7 @@ class Room {
 
   horn() {
     for (const client of this.clients) {
-      client.send("horn");
+      client.send("HORN");
     }
   }
 
