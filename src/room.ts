@@ -180,6 +180,10 @@ class Room {
 
   rewindToLastReset() {
     if (this.shotclockAtLastReset) {
+      if (this.title != null) {
+        this.title = null;
+        this.sendTitleToClients();
+      }
       this.shotclockRemaining = this.shotclockAtLastReset;
       this.sendShotclockToClients();
       if (this.running) {
