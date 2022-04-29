@@ -88,21 +88,31 @@ wss.on("connection", function connection(ws: WebSocket, req: any) {
       case "setInitialShotclock":
         if (commandData) {
           const t: number = parseInt(commandData);
-          if (!isNaN(t)) room.initialShotclock = t;
-          if (!room.running)
-            room.reset();
+          if (!isNaN(t) && t > 0) {
+            room.initialShotclock = t;
+            if (!room.running)
+              room.reset();
+          }
         }
         break;
       case "setTimeout":
         if (commandData) {
           const t: number = parseInt(commandData);
-          if (!isNaN(t)) room.timeoutTime = t;
+          if (!isNaN(t) && t > 0) {
+            room.timeoutTime = t;
+          }
         }
         break;
       case "setQuarter":
         if (commandData) {
           const t: number = parseInt(commandData);
           if (!isNaN(t)) room.quarterTime = t;
+        }
+        break;
+      case "setHalftime":
+        if (commandData) {
+          const t: number = parseInt(commandData);
+          if (!isNaN(t)) room.halftimeTime = t;
         }
         break;
       case "horn":

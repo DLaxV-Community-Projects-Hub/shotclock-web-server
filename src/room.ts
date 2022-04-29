@@ -20,6 +20,7 @@ class Room {
   activeTimer: ReturnType<typeof setTimeout> | null = null;
   websocketKeepAliveTimer: ReturnType<typeof setInterval> | null = null;
   title: string | null = null;
+  titleResetTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Additional properties for future use
   gameTime: number = 0;
@@ -199,6 +200,10 @@ class Room {
         this.title = null;
         this.sendTitleToClients();
       }
+      if (this.titleResetTimeoutTimer != null) {
+        clearTimeout(this.titleResetTimeoutTimer);
+        this.titleResetTimeoutTimer = null;
+      }
       this.shotclockRemaining = this.shotclockAtLastReset;
       this.sendShotclockToClients();
       if (this.running) {
@@ -245,6 +250,12 @@ class Room {
       this.shotclockRemaining = 0;
       this.running = false;
       this.sendRunningToClients();
+      if (this.title != null) {
+        this.titleResetTimeoutTimer = setTimeout(() => {
+          this.titleResetTimeoutTimer = null;
+          this.rewindToLastReset();
+        }, 3000);
+      }
     }
     this.sendShotclockToClients();
     this.setNextSecondTimer();
