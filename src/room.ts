@@ -156,7 +156,7 @@ class Room {
 
   timeout() {
     this.pause();
-    if (this.title != null) {
+    if (this.title == null) {
       this.saveTimeAtReset();
     }
     this.title = "Timeout";
@@ -168,7 +168,7 @@ class Room {
 
   quarter() {
     this.pause();
-    if (this.title != null) {
+    if (this.title == null) {
       this.saveTimeAtReset();
     }
     this.title = "Quarter";
