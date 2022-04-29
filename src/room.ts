@@ -155,7 +155,10 @@ class Room {
   }
 
   saveTimeAtReset() {
-    this.shotclockAtLastReset = this.shotclockRemaining - (Date.now() - this.lastTimerOrActionDate.getTime());
+    if (this.running)
+      this.shotclockAtLastReset = this.shotclockRemaining - (Date.now() - this.lastTimerOrActionDate.getTime());
+    else
+      this.shotclockAtLastReset = this.shotclockRemaining;
   }
 
   timeout() {
