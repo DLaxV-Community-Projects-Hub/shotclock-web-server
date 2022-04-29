@@ -10,6 +10,8 @@ class Room {
   initialShotclock: number; // seconds
   timeoutTime: number; // seconds
   quarterTime: number; // seconds
+  halftimeTime: number; // seconds
+
 
   // In-Memory only props
   lastTimerOrActionDate: Date;
@@ -30,7 +32,8 @@ class Room {
     this.pin = pin;
     this.initialShotclock = 30;
     this.timeoutTime = 30;
-    this.quarterTime = 180;
+    this.quarterTime = 120;
+    this.halftimeTime = 300;
     this.shotclockRemaining = this.initialShotclock * 1000;
     this.lastTimerOrActionDate = new Date();
   }
@@ -173,6 +176,18 @@ class Room {
     }
     this.title = "Quarter";
     this.shotclockRemaining = this.quarterTime * 1000;
+    this.sendTitleToClients();
+    this.sendShotclockToClients();
+    this.start();
+  }
+
+  halftime() {
+    this.pause();
+    if (this.title == null) {
+      this.saveTimeAtReset();
+    }
+    this.title = "Halftime";
+    this.shotclockRemaining = this.halftimeTime * 1000;
     this.sendTitleToClients();
     this.sendShotclockToClients();
     this.start();

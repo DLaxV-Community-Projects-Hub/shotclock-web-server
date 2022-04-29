@@ -114,6 +114,9 @@ wss.on("connection", function connection(ws: WebSocket, req: any) {
       case "quarter":
         room.quarter();
         break;
+      case "halftime":
+          room.halftime();
+          break;
     }
   });
 
