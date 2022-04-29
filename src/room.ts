@@ -215,7 +215,7 @@ class Room {
   }
 
   updateTime(t: number) {
-    this.shotclockRemaining = Math.max(0, this.shotclockRemaining + t * 1000);
+    this.shotclockRemaining = Math.min(this.initialShotclock * 1000, Math.max(0, this.shotclockRemaining + t * 1000));
     this.sendShotclockToClients();
     if (this.running) {
       if (this.activeTimer !== null) clearTimeout(this.activeTimer);
