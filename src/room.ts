@@ -1,4 +1,3 @@
-import { isArgumentsObject } from "util/types";
 import { Data, WebSocket } from "ws";
 
 class Room {
@@ -8,13 +7,17 @@ class Room {
   running: boolean = false;
   shotclockRemaining: number; // milliseconds
 
-  // In-Memory only props
   initialShotclock: number; // seconds
+  timeoutTime: number; // seconds
+  quarterTime: number; // seconds
+
+  // In-Memory only props
   lastTimerOrActionDate: Date;
   shotclockAtLastReset: number | null = null;
   clients: Array<WebSocket> = [];
   activeTimer: ReturnType<typeof setTimeout> | null = null;
   websocketKeepAliveTimer: ReturnType<typeof setInterval> | null = null;
+  title: string | null = null;
 
   // Additional properties for future use
   gameTime: number = 0;
@@ -22,11 +25,13 @@ class Room {
   scoreHome: number = 0;
   scoreAway: number = 0;
 
-  constructor(name: string, pin: string, initialShotclock: number) {
+  constructor(name: string, pin: string) {
     this.name = name;
     this.pin = pin;
-    this.initialShotclock = initialShotclock;
-    this.shotclockRemaining = initialShotclock * 1000;
+    this.initialShotclock = 30;
+    this.timeoutTime = 30;
+    this.quarterTime = 180;
+    this.shotclockRemaining = this.initialShotclock * 1000;
     this.lastTimerOrActionDate = new Date();
   }
 
@@ -34,12 +39,19 @@ class Room {
     this.clients.push(ws);
     this.sendRunningToClient(ws);
     this.sendShotclockToClient(ws);
+    this.sendTitleToClient(ws);
   }
 
   disconnectClient(ws: WebSocket) {
     const index: number = this.clients.indexOf(ws);
     if (index !== -1) this.clients.splice(index, 1);
-    if (this.clients.length == 0) this.pause();
+    if (this.clients.length == 0) {
+      this.pause();
+      if (this.websocketKeepAliveTimer != null) {
+        clearInterval(this.websocketKeepAliveTimer);
+        this.websocketKeepAliveTimer = null;
+      }
+    }
   }
 
   checkPin(pin: string): boolean {
@@ -60,6 +72,17 @@ class Room {
     if (remainingSeconds === null)
       remainingSeconds = Math.round(this.shotclockRemaining / 1000);
     client.send("t;" + this.gameTime + ";" + remainingSeconds);
+  }
+
+  sendTitleToClients() {
+    for (const client of this.clients) {
+      this.sendTitleToClient(client);
+    }
+  }
+
+  sendTitleToClient(client: WebSocket) {
+    const sendTitle = this.title != null ? this.title : "";
+    client.send("T;" + sendTitle);
   }
 
   sendRunningToClients() {
@@ -96,13 +119,13 @@ class Room {
         this.lastTimerOrActionDate = new Date();
       }
       this.sendRunningToClients();
+      this.sendShotclockToClients();
       this.startWebsocketKeepAliveTimer();
     }
   }
 
   startWebsocketKeepAliveTimer() {
     this.websocketKeepAliveTimer =  setInterval(() => {
-      console.log("Keeping websocket connections in room " + this.name + " alive");
       this.sendShotclockToClients();
     }, 10000);
   }
@@ -110,14 +133,45 @@ class Room {
   reset() {
     // Auto restart when reset after it hit 0
     let restart: boolean = this.shotclockRemaining == 0;
-    this.shotclockRemaining =
-      this.shotclockRemaining -
-      (Date.now() - this.lastTimerOrActionDate.getTime());
-    this.shotclockAtLastReset = this.shotclockRemaining;
+
+    // Remove title
+    if (this.title != null) {
+      this.title = null;
+      this.sendTitleToClients();
+      // Don't auto restart after timeout/quarter
+      restart = false;
+    } else {
+      this.saveTimeAtReset();
+    }
+    
     this.shotclockRemaining = this.initialShotclock * 1000;
     this.sendShotclockToClients();
     if (restart) this.start();
     this.lastTimerOrActionDate = new Date();
+  }
+
+  saveTimeAtReset() {
+    this.shotclockAtLastReset = this.shotclockRemaining - (Date.now() - this.lastTimerOrActionDate.getTime());
+  }
+
+  timeout() {
+    this.pause();
+    this.title = "Timeout";
+    this.saveTimeAtReset();
+    this.shotclockRemaining = this.timeoutTime * 1000;
+    this.sendTitleToClients();
+    this.sendShotclockToClients();
+    this.start();
+  }
+
+  quarter() {
+    this.pause();
+    this.title = "Quarter";
+    this.saveTimeAtReset();
+    this.shotclockRemaining = this.quarterTime * 1000;
+    this.sendTitleToClients();
+    this.sendShotclockToClients();
+    this.start();
   }
 
   rewindToLastReset() {

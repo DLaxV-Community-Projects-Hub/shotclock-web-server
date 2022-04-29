@@ -5,8 +5,6 @@ import Room from "./room";
 
 const port: number = 8080;
 
-const initialShotclock: number = 30;
-
 const wss: WebSocketServer = new WebSocketServer({ port });
 console.log("Listening on port " + port);
 
@@ -26,7 +24,7 @@ wss.on("connection", function connection(ws: WebSocket, req: any) {
     if (searchParams.has("pin")) {
       // Create room
       const pin: string = searchParams.get("pin") as string;
-      room = new Room(roomName, pin, initialShotclock);
+      room = new Room(roomName, pin);
       authenticated = true;
       rooms[roomName] = room;
       console.log("Room " + roomName + " created with PIN " + pin);
@@ -87,8 +85,34 @@ wss.on("connection", function connection(ws: WebSocket, req: any) {
           if (!isNaN(t)) room.updateTime(t);
         }
         break;
+      case "setInitialShotclock":
+        if (commandData) {
+          const t: number = parseInt(commandData);
+          if (!isNaN(t)) room.initialShotclock = t;
+          if (!room.running)
+            room.reset();
+        }
+        break;
+      case "setTimeout":
+        if (commandData) {
+          const t: number = parseInt(commandData);
+          if (!isNaN(t)) room.timeoutTime = t;
+        }
+        break;
+      case "setQuarter":
+        if (commandData) {
+          const t: number = parseInt(commandData);
+          if (!isNaN(t)) room.quarterTime = t;
+        }
+        break;
       case "horn":
         room.horn();
+        break;
+      case "timeout":
+        room.timeout();
+        break;
+      case "quarter":
+        room.quarter();
         break;
     }
   });
