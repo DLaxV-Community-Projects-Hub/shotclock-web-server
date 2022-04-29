@@ -156,8 +156,10 @@ class Room {
 
   timeout() {
     this.pause();
+    if (this.title != null) {
+      this.saveTimeAtReset();
+    }
     this.title = "Timeout";
-    this.saveTimeAtReset();
     this.shotclockRemaining = this.timeoutTime * 1000;
     this.sendTitleToClients();
     this.sendShotclockToClients();
@@ -166,8 +168,10 @@ class Room {
 
   quarter() {
     this.pause();
+    if (this.title != null) {
+      this.saveTimeAtReset();
+    }
     this.title = "Quarter";
-    this.saveTimeAtReset();
     this.shotclockRemaining = this.quarterTime * 1000;
     this.sendTitleToClients();
     this.sendShotclockToClients();
