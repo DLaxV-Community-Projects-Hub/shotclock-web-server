@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { IncomingMessage } from "http";
 import Room from "./room";
 import RoomRegistry from "./roomRegistry";
+import RoomStore from "./store";
 import { handleCommand } from "./commands";
 import { ConnectionCounter, LIMITS, RateLimiter, getClientIp } from "./limits";
 
@@ -17,7 +18,10 @@ wss.on("error", (error: Error) => {
   console.error("Server error", error);
 });
 
-const rooms: RoomRegistry = new RoomRegistry();
+const dataDir: string = process.env.DATA_DIR ?? "./data";
+const rooms: RoomRegistry = new RoomRegistry(
+  new RoomStore(dataDir + "/shotclock.db")
+);
 
 const connectionCounter: ConnectionCounter = new ConnectionCounter(
   LIMITS.maxConnectionsPerIp
@@ -110,6 +114,7 @@ wss.on("connection", function connection(ws: WebSocket, req: IncomingMessage) {
       return;
     }
     handleCommand(room, data.toString());
+    rooms.markDirty(room);
   });
 
   ws.on("close", function close() {
@@ -190,3 +195,17 @@ wss.on("connection", function connection(ws: WebSocket, req: IncomingMessage) {
       pendingPinChecks--;
     });
 });
+
+// Save all rooms before the process ends (docker stop sends SIGTERM)
+async function shutdown(): Promise<void> {
+  console.log("Shutting down");
+  clearInterval(heartbeat);
+  wss.close();
+  for (const ws of wss.clients) {
+    ws.terminate();
+  }
+  await rooms.shutdown();
+  process.exit(0);
+}
+process.on("SIGTERM", () => void shutdown());
+process.on("SIGINT", () => void shutdown());

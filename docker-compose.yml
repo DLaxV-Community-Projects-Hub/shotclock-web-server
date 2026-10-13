@@ -2,9 +2,11 @@ services:
   shotclock-web-server:
     build: .
     ports:
-      - '127.0.0.1:8080:8080'
+      - '127.0.0.1:8011:8080'
     restart: unless-stopped
     environment:
       # Only reachable through the reverse proxy on the host, so the client IP
       # comes from the X-Forwarded-For header the proxy appends
       TRUST_PROXY: 'true'
+    volumes:
+      - ./data:/usr/src/app/data

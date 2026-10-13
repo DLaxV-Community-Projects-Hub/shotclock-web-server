@@ -18,8 +18,10 @@ export const LIMITS = {
   maxConcurrentPinChecks: 8,
   // Commands per second and connection
   messagesPerSecond: 20,
-  // Empty rooms are removed after this time
+  // Empty rooms are unloaded from memory after this time (they stay in the database)
   emptyRoomTtlMs: 60 * 60 * 1000,
+  // Rooms that were not used for this long are deleted from the database
+  roomRetentionMs: 24 * 60 * 60 * 1000,
   heartbeatIntervalMs: 30 * 1000,
 };
 

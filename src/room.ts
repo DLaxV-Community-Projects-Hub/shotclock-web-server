@@ -1,5 +1,6 @@
 import { WebSocket } from "ws";
-import { PinHash, hashPin, verifyPin } from "./pin";
+import { PinHash, verifyPin } from "./pin";
+import { RoomRecord } from "./store";
 
 class Room {
   name: string;
@@ -28,9 +29,9 @@ class Room {
   scoreHome: number = 0;
   scoreAway: number = 0;
 
-  constructor(name: string, pin: string) {
+  constructor(name: string, pinHash: Promise<PinHash>) {
     this.name = name;
-    this.pinHash = hashPin(pin);
+    this.pinHash = pinHash;
     // Failures are reported when the hash is awaited in checkPin
     this.pinHash.catch(() => {});
     this.initialShotclock = 30;
@@ -39,6 +40,40 @@ class Room {
     this.halftimeTime = 300;
     this.shotclockRemaining = this.initialShotclock * 1000;
     this.lastTimerOrActionDate = new Date();
+  }
+
+  // Recreates a room from storage, it comes back paused
+  static restore(record: RoomRecord): Room {
+    const room: Room = new Room(
+      record.name,
+      Promise.resolve({ salt: record.pinSalt, hash: record.pinHash })
+    );
+    room.initialShotclock = record.initialShotclock;
+    room.timeoutTime = record.timeoutTime;
+    room.quarterTime = record.quarterTime;
+    room.halftimeTime = record.halftimeTime;
+    room.shotclockRemaining = record.shotclockRemaining;
+    room.title = record.title;
+    room.shotclockAtLastReset = record.shotclockAtLastReset;
+    return room;
+  }
+
+  async snapshot(): Promise<RoomRecord> {
+    const pinHash: PinHash = await this.pinHash;
+    return {
+      name: this.name,
+      pinSalt: pinHash.salt,
+      pinHash: pinHash.hash,
+      initialShotclock: this.initialShotclock,
+      timeoutTime: this.timeoutTime,
+      quarterTime: this.quarterTime,
+      halftimeTime: this.halftimeTime,
+      shotclockRemaining: this.running
+        ? Math.max(0, this.currentShotclockRemaining())
+        : this.shotclockRemaining,
+      title: this.title,
+      shotclockAtLastReset: this.shotclockAtLastReset,
+    };
   }
 
   joinClient(ws: WebSocket) {
