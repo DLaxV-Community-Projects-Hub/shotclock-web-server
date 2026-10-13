@@ -1,9 +1,7 @@
 import { WebSocketServer, WebSocket } from "ws";
-const url = require("url");
-import { URLSearchParams } from "url";
 import Room from "./room";
 
-const port: number = 8080;
+const port: number = Number(process.env.PORT) || 8080;
 
 const wss: WebSocketServer = new WebSocketServer({ port });
 console.log("Listening on port " + port);
@@ -11,14 +9,14 @@ console.log("Listening on port " + port);
 let rooms: Record<string, Room> = {};
 
 wss.on("connection", function connection(ws: WebSocket, req: any) {
-  const reqUrl: any = url.parse(req["url"]);
-  let roomName: string = reqUrl["pathname"];
+  const reqUrl: URL = new URL(req.url ?? "/", "http://localhost");
+  let roomName: string = reqUrl.pathname;
   // Remove all leading slashes
   while (roomName.charAt(0) === "/") roomName = roomName.substring(1);
 
   let authenticated: boolean = false;
 
-  const searchParams: URLSearchParams = new URLSearchParams(reqUrl["search"]);
+  const searchParams: URLSearchParams = reqUrl.searchParams;
   let room: Room;
   if (!(roomName in rooms)) {
     if (searchParams.has("pin")) {
@@ -27,7 +25,7 @@ wss.on("connection", function connection(ws: WebSocket, req: any) {
       room = new Room(roomName, pin);
       authenticated = true;
       rooms[roomName] = room;
-      console.log("Room " + roomName + " created with PIN " + pin);
+      console.log("Room " + roomName + " created");
     } else {
       ws.send("ROOM_NOT_FOUND");
       ws.close();
@@ -42,10 +40,7 @@ wss.on("connection", function connection(ws: WebSocket, req: any) {
     const pin: string = searchParams.get("pin") as string;
     if (!(authenticated = room.checkPin(pin))) {
       console.log(
-        "Unsuccessful authentication for room " +
-          room.name +
-          " with wrong PIN " +
-          pin
+        "Unsuccessful authentication for room " + room.name
       );
       ws.send("WRONG_PIN");
       ws.close();
