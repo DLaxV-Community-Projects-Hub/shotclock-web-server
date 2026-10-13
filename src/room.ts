@@ -1,8 +1,9 @@
-import { Data, WebSocket } from "ws";
+import { WebSocket } from "ws";
+import { PinHash, hashPin, verifyPin } from "./pin";
 
 class Room {
   name: string;
-  pin: string; // TODO argon2
+  pinHash: Promise<PinHash>;
   active: boolean = true;
   running: boolean = false;
   shotclockRemaining: number; // milliseconds
@@ -11,7 +12,6 @@ class Room {
   timeoutTime: number; // seconds
   quarterTime: number; // seconds
   halftimeTime: number; // seconds
-
 
   // In-Memory only props
   lastTimerOrActionDate: Date;
@@ -30,7 +30,9 @@ class Room {
 
   constructor(name: string, pin: string) {
     this.name = name;
-    this.pin = pin;
+    this.pinHash = hashPin(pin);
+    // Failures are reported when the hash is awaited in checkPin
+    this.pinHash.catch(() => {});
     this.initialShotclock = 30;
     this.timeoutTime = 30;
     this.quarterTime = 120;
@@ -48,55 +50,60 @@ class Room {
 
   disconnectClient(ws: WebSocket) {
     const index: number = this.clients.indexOf(ws);
-    if (index !== -1) this.clients.splice(index, 1);
+    if (index !== -1) {
+      this.clients.splice(index, 1);
+    }
     if (this.clients.length == 0) {
       this.pause();
-      if (this.websocketKeepAliveTimer != null) {
-        clearInterval(this.websocketKeepAliveTimer);
-        this.websocketKeepAliveTimer = null;
-      }
+      this.stopWebsocketKeepAliveTimer();
     }
   }
 
-  checkPin(pin: string): boolean {
-    return pin === this.pin;
+  async checkPin(pin: string): Promise<boolean> {
+    return verifyPin(pin, await this.pinHash);
+  }
+
+  private broadcast(message: string) {
+    for (const client of this.clients) {
+      client.send(message);
+    }
   }
 
   sendShotclockToClients() {
-    const remainingSeconds: number = Math.round(this.shotclockRemaining / 1000);
-    for (const client of this.clients) {
-      this.sendShotclockToClient(client, remainingSeconds);
-    }
+    this.broadcast(this.shotclockMessage());
   }
 
-  sendShotclockToClient(
-    client: WebSocket,
-    remainingSeconds: number | null = null
-  ) {
-    if (remainingSeconds === null)
-      remainingSeconds = Math.round(this.shotclockRemaining / 1000);
-    client.send("t;" + this.gameTime + ";" + remainingSeconds);
+  sendShotclockToClient(client: WebSocket) {
+    client.send(this.shotclockMessage());
+  }
+
+  private shotclockMessage(): string {
+    const remainingSeconds: number = Math.round(this.shotclockRemaining / 1000);
+    return "t;" + this.gameTime + ";" + remainingSeconds;
   }
 
   sendTitleToClients() {
-    for (const client of this.clients) {
-      this.sendTitleToClient(client);
-    }
+    this.broadcast(this.titleMessage());
   }
 
   sendTitleToClient(client: WebSocket) {
-    const sendTitle = this.title != null ? this.title : "";
-    client.send("T;" + sendTitle);
+    client.send(this.titleMessage());
+  }
+
+  private titleMessage(): string {
+    return "T;" + (this.title ?? "");
   }
 
   sendRunningToClients() {
-    for (const client of this.clients) {
-      this.sendRunningToClient(client);
-    }
+    this.broadcast(this.runningMessage());
   }
 
   sendRunningToClient(client: WebSocket) {
-    client.send("r;" + (this.running ? 1 : 0));
+    client.send(this.runningMessage());
+  }
+
+  private runningMessage(): string {
+    return "r;" + (this.running ? 1 : 0);
   }
 
   start() {
@@ -105,33 +112,66 @@ class Room {
       this.setNextSecondTimer();
       this.sendRunningToClients();
       this.lastTimerOrActionDate = new Date();
-      if (this.websocketKeepAliveTimer != null) {
-        clearInterval(this.websocketKeepAliveTimer);
-        this.websocketKeepAliveTimer = null;
-      }
+      this.stopWebsocketKeepAliveTimer();
     }
   }
 
   pause() {
     if (this.running) {
       this.running = false;
-      if (this.activeTimer !== null) clearTimeout(this.activeTimer);
-      if (this.lastTimerOrActionDate !== null) {
-        this.shotclockRemaining =
-          this.shotclockRemaining -
-          (Date.now() - this.lastTimerOrActionDate.getTime());
-        this.lastTimerOrActionDate = new Date();
+      if (this.activeTimer !== null) {
+        clearTimeout(this.activeTimer);
       }
+      this.shotclockRemaining = this.currentShotclockRemaining();
+      this.lastTimerOrActionDate = new Date();
       this.sendRunningToClients();
       this.sendShotclockToClients();
       this.startWebsocketKeepAliveTimer();
     }
   }
 
+  // Stops all timers, the room must not be used afterwards
+  destroy() {
+    this.running = false;
+    if (this.activeTimer !== null) {
+      clearTimeout(this.activeTimer);
+      this.activeTimer = null;
+    }
+    if (this.titleResetTimeoutTimer !== null) {
+      clearTimeout(this.titleResetTimeoutTimer);
+      this.titleResetTimeoutTimer = null;
+    }
+    this.stopWebsocketKeepAliveTimer();
+  }
+
   startWebsocketKeepAliveTimer() {
-    this.websocketKeepAliveTimer =  setInterval(() => {
+    this.websocketKeepAliveTimer = setInterval(() => {
       this.sendShotclockToClients();
     }, 10000);
+  }
+
+  private stopWebsocketKeepAliveTimer() {
+    if (this.websocketKeepAliveTimer != null) {
+      clearInterval(this.websocketKeepAliveTimer);
+      this.websocketKeepAliveTimer = null;
+    }
+  }
+
+  // Remaining time including the time elapsed since the last update
+  private currentShotclockRemaining(): number {
+    return (
+      this.shotclockRemaining -
+      (Date.now() - this.lastTimerOrActionDate.getTime())
+    );
+  }
+
+  private restartSecondTimer() {
+    if (this.running) {
+      if (this.activeTimer !== null) {
+        clearTimeout(this.activeTimer);
+      }
+      this.setNextSecondTimer();
+    }
   }
 
   reset() {
@@ -147,51 +187,40 @@ class Room {
     } else {
       this.saveTimeAtReset();
     }
-    
+
     this.shotclockRemaining = this.initialShotclock * 1000;
     this.sendShotclockToClients();
-    if (restart) this.start();
+    if (restart) {
+      this.start();
+    }
     this.lastTimerOrActionDate = new Date();
   }
 
   saveTimeAtReset() {
-    if (this.running)
-      this.shotclockAtLastReset = this.shotclockRemaining - (Date.now() - this.lastTimerOrActionDate.getTime());
-    else
-      this.shotclockAtLastReset = this.shotclockRemaining;
+    this.shotclockAtLastReset = this.running
+      ? this.currentShotclockRemaining()
+      : this.shotclockRemaining;
   }
 
   timeout() {
-    this.pause();
-    if (this.title == null) {
-      this.saveTimeAtReset();
-    }
-    this.title = "Timeout";
-    this.shotclockRemaining = this.timeoutTime * 1000;
-    this.sendTitleToClients();
-    this.sendShotclockToClients();
-    this.start();
+    this.startTitled("Timeout", this.timeoutTime);
   }
 
   quarter() {
-    this.pause();
-    if (this.title == null) {
-      this.saveTimeAtReset();
-    }
-    this.title = "Quarter";
-    this.shotclockRemaining = this.quarterTime * 1000;
-    this.sendTitleToClients();
-    this.sendShotclockToClients();
-    this.start();
+    this.startTitled("Quarter", this.quarterTime);
   }
 
   halftime() {
+    this.startTitled("Halftime", this.halftimeTime);
+  }
+
+  private startTitled(title: string, seconds: number) {
     this.pause();
     if (this.title == null) {
       this.saveTimeAtReset();
     }
-    this.title = "Halftime";
-    this.shotclockRemaining = this.halftimeTime * 1000;
+    this.title = title;
+    this.shotclockRemaining = seconds * 1000;
     this.sendTitleToClients();
     this.sendShotclockToClients();
     this.start();
@@ -209,10 +238,7 @@ class Room {
       }
       this.shotclockRemaining = this.shotclockAtLastReset;
       this.sendShotclockToClients();
-      if (this.running) {
-        if (this.activeTimer !== null) clearTimeout(this.activeTimer);
-        this.setNextSecondTimer();
-      }
+      this.restartSecondTimer();
       this.lastTimerOrActionDate = new Date();
     }
   }
@@ -220,25 +246,22 @@ class Room {
   updateTime(t: number) {
     this.shotclockRemaining = Math.min(this.initialShotclock * 1000, Math.max(0, this.shotclockRemaining + t * 1000));
     this.sendShotclockToClients();
-    if (this.running) {
-      if (this.activeTimer !== null) clearTimeout(this.activeTimer);
-      this.setNextSecondTimer();
-    }
+    this.restartSecondTimer();
     this.lastTimerOrActionDate = new Date();
   }
 
   horn() {
     if (this.shotclockRemaining > 2000) {
-      for (const client of this.clients) {
-        client.send("HORN");
-      }
+      this.broadcast("HORN");
     }
   }
 
   setNextSecondTimer() {
     if (this.running) {
       let timeout: number = this.shotclockRemaining % 1000;
-      if (timeout == 0) timeout = 1000;
+      if (timeout == 0) {
+        timeout = 1000;
+      }
       this.activeTimer = setTimeout(() => {
         this.updateRemainingShotclockByDate();
       }, timeout);
@@ -246,9 +269,7 @@ class Room {
   }
 
   updateRemainingShotclockByDate() {
-    this.shotclockRemaining =
-      this.shotclockRemaining -
-      (Date.now() - this.lastTimerOrActionDate.getTime());
+    this.shotclockRemaining = this.currentShotclockRemaining();
     if (this.shotclockRemaining <= 0) {
       this.shotclockRemaining = 0;
       this.running = false;
